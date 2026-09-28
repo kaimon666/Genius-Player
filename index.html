@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Music Player</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: #121212;
+    color: #fff;
+    min-height: 100vh;
+    padding-bottom: 180px;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 16px; }
+
+  h1 { font-size: 24px; margin-bottom: 16px; }
+
+  /* Search & Sort */
+  .search {
+    width: 100%; padding: 12px;
+    background: #282828; border: none; border-radius: 8px;
+    color: #fff; font-size: 14px; margin-bottom: 12px;
+  }
+  .sort-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .sort-btn {
+    padding: 6px 14px; border-radius: 16px;
+    background: #282828; color: #fff; border: none;
+    font-size: 12px; cursor: pointer; text-transform: capitalize;
+  }
+  .sort-btn.active { background: #1DB954; color: #000; font-weight: 600; }
+
+  /* Track List */
+  .track {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 8px; border-bottom: 1px solid #282828;
+    cursor: pointer;
+  }
+  .track:hover { background: #1a1a1a; }
+  .track.playing { background: #1a2a1a; }
+  .track-info { flex: 1; min-width: 0; }
+  .track-title { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-artist { font-size: 12px; color: #888; margin-top: 2px; }
+  .track-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    background: none; border: none; color: #1DB954;
+    font-size: 18px; cursor: pointer; padding: 4px;
+  }
+
+  /* Player */
+  .player {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #1a1a1a; border-top: 1px solid #282828;
+    padding: 12px 16px; z-index: 100;
+  }
+  .player-inner { max-width: 720px; margin: 0 auto; }
+  .now-playing { font-size: 14px; color: #1DB954; text-align: center; margin-bottom: 6px; }
+  .now-artist { font-size: 12px; color: #888; text-align: center; }
+
+  .progress-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .progress-row span { font-size: 11px; color: #888; min-width: 36px; text-align: center; }
+  input[type="range"] {
+    flex: 1; height: 4px; -webkit-appearance: none;
+    background: #333; border-radius: 2px; outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    background: #1DB954; border-radius: 50%; cursor: pointer;
+  }
+
+  .controls { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 8px; }
+  .ctrl {
+    background: none; border: none; color: #fff;
+    font-size: 22px; cursor: pointer; padding: 6px;
+  }
+  .ctrl.play { font-size: 32px; color: #1DB954; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: none; justify-content: center; align-items: center;
+    z-index: 200; padding: 20px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: #1a1a1a; border-radius: 12px;
+    padding: 20px; width: 100%; max-width: 480px;
+    max-height: 80vh; overflow-y: auto;
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 16px; }
+  .modal-close {
+    background: #1DB954; color: #000; border: none;
+    padding: 10px 20px; border-radius: 8px; font-weight: 600;
+    cursor: pointer; width: 100%; margin-top: 16px;
+  }
+
+  /* EQ */
+  .eq-band { margin-bottom: 14px; }
+  .eq-band label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .eq-presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .eq-presets button {
+    padding: 6px 12px; border-radius: 16px; border: 1px solid #333;
+    background: none; color: #fff; cursor: pointer; font-size: 12px;
+  }
+  .eq-presets button:hover { background: #282828; }
+
+  /* Lyrics */
+  .lyrics-box {
+    background: #1a1a1a; border-radius: 8px; padding: 16px;
+    margin: 12px 0; max-height: 200px; overflow-y: auto;
+    text-align: center; font-size: 15px; line-height: 1.8;
+  }
+  .lyrics-box .line { color: #666; transition: color 0.3s; }
+  .lyrics-box .line.active { color: #1DB954; font-weight: 600; font-size: 17px; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 200px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; padding: 10px 20px;
+    border-radius: 8px; font-size: 13px; z-index: 300;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  .empty { text-align: center; color: #666; padding: 40px 0; }
+
+  .fab {
+    position: fixed; bottom: 180px; right: 20px;
+    background: #1DB954; color: #000; border: none;
+    width: 48px; height: 48px; border-radius: 50%;
+    font-size: 22px; cursor: pointer; z-index: 90;
+    box-shadow: 0 4px 12px rgba(29,185,84,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🎵 Music Player</h1>
+
+  <input type="file" id="fileInput" multiple accept="audio/*"
+         style="display:none" />
+  <button class="fab" onclick="document.getElementById('fileInput').click()">+</button>
+
+  <input class="search" id="search" placeholder="Cari lagu atau artis..." />
+
+  <div class="sort-row" id="sortRow">
+    <button class="sort-btn active" data-sort="title">Judul</button>
+    <button class="sort-btn" data-sort="artist">Artis</button>
+    <button class="sort-btn" data-sort="album">Album</button>
+    <button class="sort-btn" data-sort="genre">Genre</button>
+    <button class="sort-btn" data-sort="folder">Folder</button>
+  </div>
+
+  <div id="playlists"></div>
+  <div id="trackList"><p class="empty">Belum ada lagu. Klik + untuk menambah file.</p></div>
+</div>
+
+<!-- Lyrics (muncul di atas player) -->
+<div id="lyricsBox" class="lyrics-box" style="display:none"></div>
+
+<!-- Player -->
+<div class="player">
+  <div class="player-inner">
+    <div class="now-playing" id="nowTitle">Tidak ada lagu</div>
+    <div class="now-artist" id="nowArtist"></div>
+
+    <div class="progress-row">
+      <span id="curTime">0:00</span>
+      <input type="range" id="seekBar" min="0" max="100" value="0" />
+      <span id="durTime">0:00</span>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl" id="prevBtn" title="Sebelumnya">⏮</button>
+      <button class="ctrl play" id="playBtn" title="Play/Pause">▶</button>
+      <button class="ctrl" id="nextBtn" title="Berikutnya">⏭</button>
+      <button class="ctrl" id="shuffleBtn" title="Acak">🔀</button>
+      <button class="ctrl" id="repeatBtn" title="Ulangi">🔁</button>
+      <button class="ctrl" id="eqBtn" title="Equalizer">🎚️</button>
+      <button class="ctrl" id="sleepBtn" title="Sleep Timer">⏱️</button>
+      <button class="ctrl" id="cutterBtn" title="Potong MP3">✂️</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal EQ -->
+<div class="modal-bg" id="eqModal">
+  <div class="modal">
+    <h2>Equalizer</h2>
+    <div class="eq-presets" id="eqPresets">
+      <button data-preset="flat">Flat</button>
+      <button data-preset="bass">Bass Boost</button>
+      <button data-preset="treble">Treble</button>
+      <button data-preset="vocal">Vocal</button>
+      <button data-preset="rock">Rock</button>
+      <button data-preset="pop">Pop</button>
+    </div>
+    <div class="eq-band">
+      <label><span>Bass (Low)</span><span id="lowVal">0 dB</span></label>
+      <input type="range" id="eqLow" min="-15" max="15" value="0" step="1" />
+    </div>
+    <div class="eq-band">
+      <label><span>Mid</span><span id="midVal">0 dB</span></label>
+      <input type="range" id="eqMid" min="-15" max="15" value="0" step="1" />
+    </div>
+    <div class="eq-band">
+      <label><span>Treble (High)</span><span id="highVal">0 dB</span></label>
+      <input type="range" id="eqHigh" min="-15" max="15" value="0" step="1" />
+    </div>
+    <button class="modal-close" onclick="closeModal('eqModal')">Tutup</button>
+  </div>
+</div>
+
+<!-- Modal Sleep Timer -->
+<div class="modal-bg" id="sleepModal">
+  <div class="modal">
+    <h2>Sleep Timer</h2>
+    <div class="eq-presets" id="sleepPresets">
+      <button data-min="15">15 menit</button>
+      <button data-min="30">30 menit</button>
+      <button data-min="45">45 menit</button>
+      <button data-min="60">60 menit</button>
+      <button data-min="90">90 menit</button>
+      <button data-min="0">Batal</button>
+    </div>
+    <p id="sleepStatus" style="color:#888;font-size:13px;text-align:center"></p>
+    <button class="modal-close" onclick="closeModal('sleepModal')">Tutup</button>
+  </div>
+</div>
+
+<!-- Modal MP3 Cutter -->
+<div class="modal-bg" id="cutterModal">
+  <div class="modal">
+    <h2>Potong MP3</h2>
+    <p style="color:#888;font-size:13px;margin-bottom:14px">
+      Pilih rentang waktu, lalu unduh hasil potongan sebagai file baru.
+    </p>
+    <div class="eq-band">
+      <label><span>Mulai (detik)</span><span id="cutStartVal">0</span></label>
+      <input type="range" id="cutStart" min="0" max="100" value="0" />
+    </div>
+    <div class="eq-band">
+      <label><span>Selesai (detik)</span><span id="cutEndVal">0</span></label>
+      <input type="range" id="cutEnd" min="0" max="100" value="100" />
+    </div>
+    <button class="modal-close" id="cutBtn">Potong & Unduh</button>
+    <button class="modal-close" style="background:#333;color:#fff;margin-top:8px"
+            onclick="closeModal('cutterModal')">Batal</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Library: jsmediatags untuk baca metadata & lrc-parser untuk lyrics -->
+<script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+
+<!-- Firebase (compat agar mudah dipakai inline) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script type="module">
+// ===================================================================
+// FIREBASE CONFIG — GANTI DENGAN MILIK ANDA
+// ===================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBg9nAGclkfHriORnS1kSw29d-RtjytdfM",
+  authDomain: "genius-player.firebaseapp.com",
+  projectId: "genius-player",
+  storageBucket: "genius-player.firebasestorage.app",
+  messagingSenderId: "737819790488",
+  appId: "1:737819790488:web:2ad161f0a9f61ed11d54ed",
+  measurementId: "G-9X4ZQMM295"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+
+// Auth anonymous agar user bisa langsung pakai
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    try { await auth.signInAnonymously(); }
+    catch (e) { console.error("Auth error:", e); toast("Firebase belum dikonfigurasi"); }
+  } else {
+    currentUser = user;
+    loadPlaylistsFromFirestore();
+  }
+});
+
+// ===================================================================
+// STATE
+// ===================================================================
+let tracks = [];          // semua lagu (session lokal)
+let filtered = [];        // lagu setelah filter
+let playlists = [];       // dari Firestore
+let currentIndex = -1;
+let isShuffle = false;
+let repeatMode = 'off';   // off | one | all
+let audioCtx = null;
+let sourceNode = null;
+let eqLow, eqMid, eqHigh, gainNode;
+let sleepTimerId = null;
+let sleepEndAt = null;
+let sleepRemainingInterval = null;
+
+// Audio element
+const audio = new Audio();
+audio.crossOrigin = "anonymous";
+audio.preload = "auto";
+
+// ===================================================================
+// WEB AUDIO EQUALIZER
+// ===================================================================
+function initAudioContext() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sourceNode = audioCtx.createMediaElementSource(audio);
+    eqLow  = audioCtx.createBiquadFilter();
+    eqMid  = audioCtx.createBiquadFilter();
+    eqHigh = audioCtx.createBiquadFilter();
+    gainNode = audioCtx.createGain();
+
+    eqLow.type  = 'lowshelf';  eqLow.frequency.value  = 200;
+    eqMid.type  = 'peaking';   eqMid.frequency.value  = 1000; eqMid.Q.value = 1;
+    eqHigh.type = 'highshelf'; eqHigh.frequency.value = 3000;
+
+    sourceNode.connect(eqLow);
+    eqLow.connect(eqMid);
+    eqMid.connect(eqHigh);
+    eqHigh.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+  } catch (e) {
+    console.warn("EQ tidak tersedia:", e);
+  }
+}
+
+// Slider EQ
+const eqLowSlider  = document.getElementById('eqLow');
+const eqMidSlider  = document.getElementById('eqMid');
+const eqHighSlider = document.getElementById('eqHigh');
+
+function updateEQ() {
+  if (!eqLow) return;
+  eqLow.gain.value  = +eqLowSlider.value;
+  eqMid.gain.value  = +eqMidSlider.value;
+  eqHigh.gain.value = +eqHighSlider.value;
+  document.getElementById('lowVal').textContent  = eqLowSlider.value  + ' dB';
+  document.getElementById('midVal').textContent  = eqMidSlider.value  + ' dB';
+  document.getElementById('highVal').textContent = eqHighSlider.value + ' dB';
+}
+[eqLowSlider, eqMidSlider, eqHighSlider].forEach(s => s.addEventListener('input', updateEQ));
+
+// Preset EQ
+document.querySelectorAll('#eqPresets button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = btn.dataset.preset;
+    const map = {
+      flat:   [0, 0, 0],
+      bass:   [10, 3, -2],
+      treble: [-2, 2, 10],
+      vocal:  [-3, 5, 3],
+      rock:   [6, -1, 5],
+      pop:    [-1, 3, 4],
+    };
+    const [lo, mid, hi] = map[p];
+    eqLowSlider.value = lo; eqMidSlider.value = mid; eqHighSlider.value = hi;
+    updateEQ();
+  });
+});
+
+// ===================================================================
+// SCAN FILE — baca metadata pakai jsmediatags
+// ===================================================================
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const track = {
+      id: file.name + '_' + file.size,
+      name: file.name,
+      url,
+      file,                     // simpan File object untuk cutter / edit tag
+      title: file.name.replace(/\.[^.]+$/, ''),
+      artist: 'Unknown Artist',
+      album: 'Unknown Album',
+      genre: 'Unknown',
+      year: '',
+      folder: file.webkitRelativePath?.split('/').slice(-2, -1)[0] || 'Lokal',
+      artwork: null,
+      duration: 0,
+      lrc: null
+    };
+
+    // Baca metadata ID3
+    await new Promise(resolve => {
+      window.jsmediatags.read(file, {
+        onSuccess: (tag) => {
+          const t = tag.tags;
+          track.title  = t.title  || track.title;
+          track.artist = t.artist || track.artist;
+          track.album  = t.album  || track.album;
+          track.genre  = t.genre  || track.genre;
+          track.year   = t.year   || '';
+          if (t.picture) {
+            const { data, format } = t.picture;
+            const bytes = new Uint8Array(data);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            track.artwork = `data:${format};base64,${btoa(binary)}`;
+          }
+          resolve();
+        },
+        onError: () => resolve()
+      });
+    });
+
+    // Durasi via elemen audio sementara
+    await new Promise(resolve => {
+      const tmp = new Audio(url);
+      tmp.addEventListener('loadedmetadata', () => {
+        track.duration = tmp.duration || 0;
+        resolve();
+      });
+      tmp.addEventListener('error', resolve);
+    });
+
+    tracks.push(track);
+  }
+  toast(`${files.length} file ditambahkan`);
+  applyFilterAndSort();
+});
+
+// ===================================================================
+// FILTER & SORT
+// ===================================================================
+let sortKey = 'title';
+let searchQuery = '';
+
+document.querySelectorAll('.sort-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    sortKey = btn.dataset.sort;
+    applyFilterAndSort();
+  });
+});
+
+document.getElementById('search').addEventListener('input', (e) => {
+  searchQuery = e.target.value.toLowerCase();
+  applyFilterAndSort();
+});
+
+function applyFilterAndSort() {
+  filtered = tracks.filter(t =>
+    (t.title || '').toLowerCase().includes(searchQuery) ||
+    (t.artist || '').toLowerCase().includes(searchQuery) ||
+    (t.album || '').toLowerCase().includes(searchQuery)
+  );
+  filtered.sort((a, b) => {
+    const av = (a[sortKey] || '').toString().toLowerCase();
+    const bv = (b[sortKey] || '').toString().toLowerCase();
+    return av < bv ? -1 : av > bv ? 1 : 0;
+  });
+  renderTracks();
+}
+
+// ===================================================================
+// RENDER TRACK LIST
+// ===================================================================
+function renderTracks() {
+  const el = document.getElementById('trackList');
+  if (!filtered.length) {
+    el.innerHTML = '<p class="empty">Belum ada lagu.</p>';
+    return;
+  }
+  el.innerHTML = filtered.map((t, i) => `
+    <div class="track ${t.id === tracks[currentIndex]?.id ? 'playing' : ''}" data-idx="${i}">
+      ${t.artwork ? `<img src="${t.artwork}" style="width:40px;height:40px;border-radius:4px;object-fit:cover">`
+                  : `<div style="width:40px;height:40px;background:#282828;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px">🎵</div>`}
+      <div class="track-info">
+        <div class="track-title">${escapeHtml(t.title)}</div>
+        <div class="track-artist">${escapeHtml(t.artist)} • ${escapeHtml(t.album)}</div>
+      </div>
+      <div class="track-actions">
+        <button class="icon-btn" data-add="${t.id}" title="Tambah ke playlist">➕</button>
+      </div>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.track').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.dataset.add) return;
+      playTrackByIndex(+row.dataset.idx);
+    });
+  });
+  el.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addToPlaylistPrompt(btn.dataset.add);
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ===================================================================
+// PLAYBACK
+// ===================================================================
+async function playTrackByIndex(idx) {
+  if (idx < 0 || idx >= filtered.length) return;
+  currentIndex = tracks.indexOf(filtered[idx]);
+  const t = filtered[idx];
+  initAudioContext();
+  if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+
+  audio.src = t.url;
+  try { await audio.play(); } catch (e) { toast("Gagal memutar: " + e.message); }
+
+  updateNowPlaying(t);
+  updateMediaSession(t);
+  renderTracks();
+  loadLyrics(t);
+}
+
+function updateNowPlaying(t) {
+  document.getElementById('nowTitle').textContent = t.title;
+  document.getElementById('nowArtist').textContent = `${t.artist} — ${t.album}`;
+}
+
+document.getElementById('playBtn').addEventListener('click', async () => {
+  initAudioContext();
+  if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+  if (audio.paused) await audio.play(); else audio.pause();
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => nextTrack());
+document.getElementById('prevBtn').addEventListener('click', () => prevTrack());
+
+function nextTrack() {
+  if (!filtered.length) return;
+  if (repeatMode === 'one') { audio.currentTime = 0; audio.play(); return; }
+  let next = (currentIndex + 1) % filtered.length;
+  if (isShuffle) next = Math.floor(Math.random() * filtered.length);
+  playTrackByIndex(filtered.indexOf(tracks[next]) === -1 ? next : filtered.indexOf(tracks[next]));
+  // sederhana: mainkan berikutnya dalam filtered
+  const fIdx = (filtered.indexOf(tracks[currentIndex]) + 1) % filtered.length;
+  playTrackByIndex(fIdx);
+}
+
+function prevTrack() {
+  if (!filtered.length) return;
+  if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+  const fIdx = (filtered.indexOf(tracks[currentIndex]) - 1 + filtered.length) % filtered.length;
+  playTrackByIndex(fIdx);
+}
+
+audio.addEventListener('play', () => { document.getElementById('playBtn').textContent = '⏸'; });
+audio.addEventListener('pause', () => { document.getElementById('playBtn').textContent = '▶'; });
+audio.addEventListener('ended', () => {
+  if (repeatMode === 'one') { audio.currentTime = 0; audio.play(); }
+  else nextTrack();
+});
+
+// Progress bar
+const seekBar = document.getElementById('seekBar');
+audio.addEventListener('timeupdate', () => {
+  if (!audio.duration) return;
+  seekBar.value = (audio.currentTime / audio.duration) * 100;
+  document.getElementById('curTime').textContent = fmt(audio.currentTime);
+  document.getElementById('durTime').textContent = fmt(audio.duration);
+  syncLyrics(audio.currentTime);
+});
+seekBar.addEventListener('input', () => {
+  if (audio.duration) audio.currentTime = (seekBar.value / 100) * audio.duration;
+});
+
+function fmt(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+// Shuffle & Repeat
+document.getElementById('shuffleBtn').addEventListener('click', (e) => {
+  isShuffle = !isShuffle;
+  e.currentTarget.style.color = isShuffle ? '#1DB954' : '#fff';
+  toast(isShuffle ? 'Acak aktif' : 'Acak mati');
+});
+document.getElementById('repeatBtn').addEventListener('click', (e) => {
+  repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
+  e.currentTarget.textContent = repeatMode === 'one' ? '🔂' : '🔁';
+  e.currentTarget.style.color = repeatMode === 'off' ? '#fff' : '#1DB954';
+  toast('Repeat: ' + repeatMode);
+});
+
+// ===================================================================
+// MEDIA SESSION — Lock Screen Control
+// ⚠️ Hanya bekerja di Chrome Android & sebagian browser. iOS Safari terbatas.
+// ===================================================================
+function updateMediaSession(t) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    artwork: t.artwork ? [{ src: t.artwork, sizes: '512x512', type: 'image/jpeg' }] : []
+  });
+  navigator.mediaSession.setActionHandler('play', () => audio.play());
+  navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+  navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
+  navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
+  navigator.mediaSession.setActionHandler('seekto', (d) => {
+    if (d.seekTime != null) audio.currentTime = d.seekTime;
+  });
+}
+
+// ===================================================================
+// SLEEP TIMER
+// ===================================================================
+document.getElementById('sleepBtn').addEventListener('click', () => openModal('sleepModal'));
+document.querySelectorAll('#sleepPresets button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const min = +btn.dataset.min;
+    if (min === 0) { cancelSleep(); toast('Sleep timer dibatalkan'); return; }
+    startSleep(min);
+  });
+});
+
+function startSleep(min) {
+  cancelSleep();
+  sleepEndAt = Date.now() + min * 60 * 1000;
+  toast(`Sleep timer: ${min} menit`);
+  document.getElementById('sleepStatus').textContent = `Aktif — sisa ${min} menit`;
+
+  sleepRemainingInterval = setInterval(() => {
+    const rem = sleepEndAt - Date.now();
+    if (rem <= 0) {
+      fadeOutAndPause();
+      cancelSleep();
+    } else {
+      const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+      document.getElementById('sleepStatus').textContent = `Sisa ${m}m ${s}s`;
+    }
+  }, 1000);
+}
+
+function cancelSleep() {
+  if (sleepRemainingInterval) clearInterval(sleepRemainingInterval);
+  sleepTimerId = null; sleepEndAt = null; sleepRemainingInterval = null;
+  document.getElementById('sleepStatus').textContent = '';
+}
+
+async function fadeOutAndPause() {
+  const startVol = audio.volume;
+  for (let i = 10; i >= 0; i--) {
+    audio.volume = (i / 10) * startVol;
+    await new Promise(r => setTimeout(r, 150));
+  }
+  audio.pause();
+  audio.volume = startVol;
+  toast('Sleep timer: musik dihentikan');
+}
+
+// ===================================================================
+// LYRICS — parser LRC sederhana
+// ===================================================================
+let currentLyrics = [];
+
+function loadLyrics(track) {
+  const box = document.getElementById('lyricsBox');
+  currentLyrics = [];
+  // Coba baca file .lrc dari nama file yang sama
+  // ⚠️ Butuh user memilih .lrc manual, karena browser tidak bisa auto-scan
+  box.style.display = 'none';
+}
+
+function parseLRC(text) {
+  const lines = text.split('\n');
+  const out = [];
+  const re = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+  for (const line of lines) {
+    const m = line.match(re);
+    if (m) {
+      const sec = +m[1]*60 + +m[2] + +m[3].padEnd(3,'0')/1000;
+      const txt = line.replace(re, '').trim();
+      if (txt) out.push({ time: sec, text: txt });
+    }
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+function syncLyrics(cur) {
+  if (!currentLyrics.length) return;
+  const box = document.getElementById('lyricsBox');
+  let active = -1;
+  for (let i = currentLyrics.length - 1; i >= 0; i--) {
+    if (cur >= currentLyrics[i].time) { active = i; break; }
+  }
+  box.querySelectorAll('.line').forEach((el, i) => {
+    el.classList.toggle('active', i === active);
+  });
+  if (active >= 0) {
+    const el = box.querySelectorAll('.line')[active];
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+}
+
+// Input LRC manual via tombol tersembunyi
+window.attachLRC = function(lrcText) {
+  currentLyrics = parseLRC(lrcText);
+  const box = document.getElementById('lyricsBox');
+  if (!currentLyrics.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = currentLyrics.map(l => `<div class="line">${escapeHtml(l.text)}</div>`).join('');
+};
+
+// ===================================================================
+// MP3 CUTTER
+// ⚠️ Menggunakan Web Audio API untuk decode & re-encode.
+//    Output: file WAV (bukan MP3), karena encoder MP3 butuh library besar.
+// ===================================================================
+document.getElementById('cutterBtn').addEventListener('click', () => {
+  const t = tracks[currentIndex];
+  if (!t) { toast('Pilih lagu dulu'); return; }
+  const cs = document.getElementById('cutStart');
+  const ce = document.getElementById('cutEnd');
+  cs.max = ce.max = Math.floor(audio.duration || t.duration || 100);
+  cs.value = 0;
+  ce.value = Math.floor(audio.duration || t.duration || 100);
+  document.getElementById('cutStartVal').textContent = cs.value;
+  document.getElementById('cutEndVal').textContent = ce.value;
+  openModal('cutterModal');
+});
+
+['cutStart','cutEnd'].forEach(id => {
+  document.getElementById(id).addEventListener('input', (e) => {
+    document.getElementById(id + 'Val').textContent = e.target.value;
+  });
+});
+
+document.getElementById('cutBtn').addEventListener('click', async () => {
+  const t = tracks[currentIndex];
+  if (!t) return;
+  const start = +document.getElementById('cutStart').value;
+  const end = +document.getElementById('cutEnd').value;
+  if (end <= start) { toast('Rentang tidak valid'); return; }
+
+  toast('Memproses...');
+  try {
+    const arrayBuf = await t.file.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await ctx.decodeAudioData(arrayBuf);
+    const sr = buf.sampleRate;
+    const startSample = Math.floor(start * sr);
+    const endSample = Math.floor(end * sr);
+    const len = endSample - startSample;
+
+    const out = ctx.createBuffer(buf.numberOfChannels, len, sr);
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      out.getChannelData(ch).set(
+        buf.getChannelData(ch).subarray(startSample, endSample)
+      );
+    }
+    const wavBlob = encodeWAV(out);
+    const url = URL.createObjectURL(wavBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cut_${t.title}.wav`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Potongan berhasil diunduh (.wav)');
+    closeModal('cutterModal');
+  } catch (e) {
+    toast('Gagal memotong: ' + e.message);
+  }
+});
+
+function encodeWAV(buffer) {
+  const numCh = buffer.numberOfChannels;
+  const sr = buffer.sampleRate;
+  const len = buffer.length;
+  const bytes = 44 + len * numCh * 2;
+  const ab = new ArrayBuffer(bytes);
+  const view = new DataView(ab);
+
+  writeStr(view, 0, 'RIFF');
+  view.setUint32(4, bytes - 8, true);
+  writeStr(view, 8, 'WAVE');
+  writeStr(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numCh, true);
+  view.setUint32(24, sr, true);
+  view.setUint32(28, sr * numCh * 2, true);
+  view.setUint16(32, numCh * 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(view, 36, 'data');
+  view.setUint32(40, len * numCh * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < len; i++) {
+    for (let ch = 0; ch < numCh; ch++) {
+      let s = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function writeStr(view, off, str) {
+  for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+}
+
+// ===================================================================
+// PLAYLIST — Firestore
+// ===================================================================
+async function loadPlaylistsFromFirestore() {
+  if (!currentUser) return;
+  const snap = await db.collection('users').doc(currentUser.uid)
+    .collection('playlists').get();
+  playlists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderPlaylists();
+}
+
+function renderPlaylists() {
+  const el = document.getElementById('playlists');
+  if (!playlists.length) { el.innerHTML = ''; return; }
+  el.innerHTML = playlists.map(p => `
+    <div style="background:#1a1a1a;border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>${escapeHtml(p.name)}</strong>
+        <span style="color:#888;font-size:12px">${(p.trackIds || []).length} lagu</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function createPlaylistFirestore(name) {
+  if (!currentUser) return;
+  const ref = await db.collection('users').doc(currentUser.uid)
+    .collection('playlists').add({
+      name, trackIds: [], createdAt: Date.now()
+    });
+  playlists.push({ id: ref.id, name, trackIds: [] });
+  renderPlaylists();
+}
+
+function addToPlaylistPrompt(trackId) {
+  const name = prompt('Nama playlist (atau kosongkan untuk buat baru):', 'Favorit');
+  if (!name) return;
+  let pl = playlists.find(p => p.name === name);
+  if (!pl) {
+    createPlaylistFirestore(name).then(() => {
+      const created = playlists.find(p => p.name === name);
+      if (created) pushTrackToPlaylist(created.id, trackId);
+    });
+  } else {
+    pushTrackToPlaylist(pl.id, trackId);
+  }
+}
+
+async function pushTrackToPlaylist(playlistId, trackId) {
+  if (!currentUser) return;
+  const ref = db.collection('users').doc(currentUser.uid)
+    .collection('playlists').doc(playlistId);
+  await ref.update({
+    trackIds: firebase.firestore.FieldValue.arrayUnion(trackId)
+  });
+  const pl = playlists.find(p => p.id === playlistId);
+  if (pl && !pl.trackIds.includes(trackId)) pl.trackIds.push(trackId);
+  renderPlaylists();
+  toast('Ditambahkan ke playlist');
+}
+
+// ===================================================================
+// MODAL HELPERS
+// ===================================================================
+window.openModal  = (id) => document.getElementById(id).classList.add('show');
+window.closeModal = (id) => document.getElementById(id).classList.remove('show');
+document.getElementById('eqBtn').addEventListener('click', () => openModal('eqModal'));
+
+// ===================================================================
+// TOAST
+// ===================================================================
+let toastTimer;
+window.toast = (msg) => {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+};
+
+// ===================================================================
+// TAG EDITOR (baca + ubah di UI, unduh sebagai file baru)
+// ⚠️ Browser tidak bisa menulis ID3 tag langsung ke file asli.
+// ===================================================================
+window.editTag = function(trackId) {
+  const t = tracks.find(x => x.id === trackId);
+  if (!t) return;
+  const title = prompt('Judul:', t.title);
+  if (title === null) return;
+  const artist = prompt('Artis:', t.artist);
+  if (artist === null) return;
+  const album = prompt('Album:', t.album);
+  if (album === null) return;
+  const year = prompt('Tahun:', t.year);
+  if (year === null) return;
+  t.title = title; t.artist = artist; t.album = album; t.year = year;
+  applyFilterAndSort();
+  toast('Metadata diperbarui (di aplikasi saja)');
+};
+
+console.log('Music Player siap. Tambahkan file MP3 dengan tombol +.');
+</script>
+</body>
+</html>
